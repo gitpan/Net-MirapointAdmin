@@ -2,12 +2,16 @@
 ##############################################################################
 #
 #	Net::MirapointAdmin Module
-#	Version:		3.0
-#	Last Edited:	ahall@mirapoint.com Fri Mar  4 15:21:30 PST 2005
-#
-#	Copyright (C) 2000-2005, Mirapoint Inc.  All rights reserved.
+#	Copyright (C) 1999-2005, Mirapoint Inc.  All rights reserved.
 #
 #	History:
+#	2005-03-10	ahall@mirapoint.com (3.01)
+#			Fixed issues with the return values of the low
+#			level protocol to match what the docs say and
+#			what the module tests perform
+#	2005-03-09	ahall@mirapoint.com (3.01)
+#			Fixed the problem on later versions of Perl (> 5.8.3)
+#			that $! == errno, not a string.
 #	2005-03-07	gpalmer@mirapoint.com (3.0)
 #			Fixed two more !defined bugs in send_command and
 #			get_response
@@ -178,9 +182,10 @@
 package Net::MirapointAdmin;
 
 use strict;
-use vars qw($VERSION $AUTOLOAD);
+use vars qw($ERRSTR $VERSION $AUTOLOAD);
 
-$VERSION = "3.0";
+$VERSION = "3.01";
+$ERRSTR  = "";
 
 use Carp;
 use Socket;
@@ -765,9 +770,21 @@ sub _getline
 {
     my $self = shift;
 
+    # If we aren't connected, return undef
+    return undef if ($self->connected() != 1);
+
+    # If our socket has disappeared, return undef
     my $fd = $self->{'socket'};
+    return undef if (!defined $fd);
+
+    # This should now work.
     my $ret = <$fd>;
-    $self->debuglog("S: $ret") if ($self->{"debug"});
+    if ($ret) {
+        $self->debuglog("S: $ret") if ($self->{"debug"});
+    } else {
+    	$self->debuglog("S: return is undef") if ($self->{"debug"});
+    }
+
     return $ret;
 }
 
@@ -922,6 +939,7 @@ sub connect
 	# $the == 1 if in new()
 	my $the = shift || 0;
 
+	$ERRSTR = "";				# Clean out the error
 	return $self if $self->connected();	# Just in case...
 
 	if ($self->{"ssl"} == 1) {
@@ -933,11 +951,11 @@ sub connect
 			SSL_verify_mode	=> 0x00);
 		if (!defined $self->{"socket"})
 		{
-			$! = "Cannot create SSL connection: $!";
+			$ERRSTR = "Cannot create SSL connection: $^E";
 			if ($the) {
 				return undef;
 			} else {
-				$self->error($!);
+				$self->error($ERRSTR);
 				return $self->raise_exception();
 			}
 		}
@@ -949,11 +967,11 @@ sub connect
 			Timeout  => 20);
 		if (!defined $self->{"socket"})
 		{
-			$! = "Cannot create TCP connection: $!";
+			$ERRSTR = "Cannot create TCP connection: $^E";
 			if ($the) {
 				return undef;
 			} else {
-				$self->error($!);
+				$self->error($ERRSTR);
 				return $self->raise_exception();
 			}
 		}
@@ -971,22 +989,22 @@ sub connect
 	my $l = $self->_getline;
 	if (!defined $l)
 	{
-		$! = "Cannot read handshake.";
+		$ERRSTR = "Cannot read handshake.";
 		if ($the) {
 			return undef;
 		} else {
-			$self->error($!);
+			$self->error($ERRSTR);
 			return $self->raise_exception();
 		}
 	}
 	if ($self->{"ignore_hand"} == 0) {
 		if ($l !~ /\* OK ([^ ]+) admind ([0-9\.]+).*/)
 		{
-			$! = "Bad handshake: $l";
+			$ERRSTR = "Bad handshake: $l";
 			if ($the) {
 				return undef;
 			} else {
-				$self->error($!);
+				$self->error($ERRSTR);
 				return $self->raise_exception();
 			}
 		} else {
@@ -1028,17 +1046,17 @@ sub xmit
 
 	# Quickie error check --- socket must be defined, or this has
 	# no meaning.
-	if (defined $self->{"socket"}) {
-		$self->debuglog("C: $cmd") if ($self->{"debug"});
-		$res = $self->{"socket"}->print("$cmd\r\n");
-		if (!defined $res)
-		{
-			$self->error("Cannot write to channel.");
-			return $self->raise_exception();
-		}
-	}
+	return undef if ($self->connected() != 1);
+	return undef unless ($self->{"socket"});
 
-	return $cmd;
+	$self->debuglog("C: $cmd") if ($self->{"debug"});
+	$res = $self->{"socket"}->print("$cmd\r\n");
+	if ($res != 1)
+	{
+		$self->error("Cannot write to channel: $^E");
+		return $self->raise_exception();
+	} 
+	return length("$cmd\r\n");
 }
 
 
@@ -1141,8 +1159,8 @@ high-level interface is more convenient.
 The new(host=>$host,args) function takes a list of arguments, and
 uses these arguments to create a TCP/IP connection to the Mirapoint
 server's administration protocol interface.  In the case of a failure,
-$! is set to the error message and undef is retruned. The arguments 
-can include the following:
+$Net::MirapointAdmin::ERRSTR is set to the error message and undef 
+is retruned. The arguments can include the following:
 
 =over 8
 
@@ -1274,13 +1292,15 @@ initiates the connection, and raises an exception on failure.
 =item C<xmit($cmd)>
 
 Send the $cmd string directly to the server.  The $cmd string should
-already have a tag in front of it.
+already have a tag in front of it.  Returns the number of bytes sent
+on success, or undef on failure.
 
 =item C<$cmd = getbuf()>
 
 Obtain one line from the Mirapoint host.  Note that no dequoting of
 the resulting line is done, and the return value may not contain the
-full output of the command executed with the xmit() function.
+full output of the command executed with the xmit() function.  Returns
+undef on error (such as an invalid connection)
 
 =back
 
