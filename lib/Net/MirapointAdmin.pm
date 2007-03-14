@@ -2,9 +2,13 @@
 ##############################################################################
 #
 #	Net::MirapointAdmin Module
-#	Copyright (C) 1999-2005, Mirapoint Inc.  All rights reserved.
+#	Copyright (C) 1999-2007, Mirapoint Inc.  All rights reserved.
 #
 #	History:
+#       2007-03-12	gpalmer@mirapoint.com (3.02)
+#			Fixed issue resulting from an API change in
+#			recent versions of IO::Socket::SSL that prevented
+#			SSL connections from working
 #	2005-03-10	ahall@mirapoint.com (3.01)
 #			Fixed issues with the return values of the low
 #			level protocol to match what the docs say and
@@ -184,7 +188,7 @@ package Net::MirapointAdmin;
 use strict;
 use vars qw($ERRSTR $VERSION $AUTOLOAD);
 
-$VERSION = "3.01";
+$VERSION = "3.02";
 $ERRSTR  = "";
 
 use Carp;
@@ -1051,7 +1055,7 @@ sub xmit
 
 	$self->debuglog("C: $cmd") if ($self->{"debug"});
 	$res = $self->{"socket"}->print("$cmd\r\n");
-	if ($res != 1)
+	if ($res < 1)
 	{
 		$self->error("Cannot write to channel: $^E");
 		return $self->raise_exception();
