@@ -63,7 +63,7 @@ _EOF
 my ($enable, $host, $user, $pass, $ssl);
 
 do {
-	$enable = Prompt("Do you wish to enable live testing?", "y");
+	$enable = Prompt("Do you wish to enable live testing?", "n");
 	$enable = lc($enable);
 } while ($enable ne "y" && $enable ne "n");
 if ($enable eq "n") {
