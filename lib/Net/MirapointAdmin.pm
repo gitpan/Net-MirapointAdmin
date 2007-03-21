@@ -5,6 +5,9 @@
 #	Copyright (C) 1999-2007, Mirapoint Inc.  All rights reserved.
 #
 #	History:
+#	2007-03-20	adrianhall@mirapoint.com (3.04)
+#			Corrected 00_use.t test - no changes to the
+#			library except for the version string.
 #	2007-03-19	adrianhall@mirapoint.com (3.03)
 #			Corrected Makefile.PL so that automated testers
 #			would work - no changes to the library except for
@@ -192,7 +195,7 @@ package Net::MirapointAdmin;
 use strict;
 use vars qw($ERRSTR $VERSION $AUTOLOAD);
 
-$VERSION = "3.03";
+$VERSION = "3.04";
 $ERRSTR  = "";
 
 use Carp;
