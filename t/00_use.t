@@ -17,6 +17,6 @@ use Net::MirapointAdmin;	# Bring it in permanently
 ok($Net::MirapointAdmin::ERRSTR, '');
 
 # Test 3 = Make sure our version is correct
-ok($Net::MirapointAdmin::VERSION, "3.04");
+ok($Net::MirapointAdmin::VERSION, "3.06");
 # End-Of-Module
 1;

@@ -2,9 +2,15 @@
 ##############################################################################
 #
 #	Net::MirapointAdmin Module
-#	Copyright (C) 1999-2007, Mirapoint Inc.  All rights reserved.
+#	Copyright (C) 1999-2008, Mirapoint Inc.  All rights reserved.
 #
 #	History:
+#	2008-01-14	nick@mirapoint.com (3.06)
+#			Fix several Unicode related bugs
+#	2007-09-18	gpalmer@mirapoint.com (3.05)
+#			Update get_response to cope with the output from
+#			some MOS commands which do not add an extra blank
+#			line after the literal section
 #	2007-03-20	adrianhall@mirapoint.com (3.04)
 #			Corrected 00_use.t test - no changes to the
 #			library except for the version string.
@@ -195,8 +201,10 @@ package Net::MirapointAdmin;
 use strict;
 use vars qw($ERRSTR $VERSION $AUTOLOAD);
 
-$VERSION = "3.04";
+$VERSION = "3.06";
 $ERRSTR  = "";
+
+use bytes ();
 
 use Carp;
 use Socket;
@@ -525,6 +533,7 @@ sub get_response
 	@response = ();	# cooked response
 	$response = ""; # raw response
 	$self->okno(undef);
+	my $blankOK = 0;
 	while (1)
 	{
 		$line = $self->_getline;
@@ -537,6 +546,11 @@ sub get_response
 		{
 			$self->error("EOF on connection.");
 			return $self->raise_exception();
+		}
+		if ($blankOK == 1)
+		{
+			$blankOK = 0;
+			next if ($line =~ /^[\r\n]+$/);
 		}
 		$lineref = [];
 		#
@@ -593,12 +607,12 @@ sub get_response
 				# _getline will eat the \r\n after the literal
 				# if the literal does not itself end with \n.
 				# In this case, $count would become negative.
-				if ($count < length($line)) {	
+				if ($count < bytes::length($line)) {	
 					substr($line, $count) = ""; 
 				}
-				$count -= length($line);
+				$count -= bytes::length($line);
 				$lit .= $line;
-				last if length($line) <= 0;
+				last if bytes::length($line) <= 0;
 			}
 			if ($cooked) {
 				push(@$lineref, $lit);
@@ -606,18 +620,8 @@ sub get_response
 				$response .= $lit; $response .= "\n";
 			}
 			# Eat closing CRLF if necessary
-			$line = $self->_getline 
+			$blankOK = 1
 				if ($lit eq "" || $lit =~ /\n$/);
-			if (!defined $line)
-			{
-				$self->error("Connection was dropped.");
-				return $self->raise_exception();
-			}
-			if ($line eq '')
-			{
-				$self->error("EOF on connection.");
-				return $self->raise_exception();
-			}
 		}
 		push(@response, $lineref) if $cooked;
 	}
@@ -821,7 +825,7 @@ sub _pack_args
 		if (/\n/) {			# literal
 			$lit = $_;		# work on a copy of it
 #			$lit =~ s/[^\r]\n/\r\n/g;	# force network EOLs
-			$cmd = "{" . length($lit) . "+}\r\n" . $lit;
+			$cmd = "{" . bytes::length($lit) . "+}\r\n" . $lit;
 		} else {
 			$cmd = $_;
 			if (/\\/) {		# escape literal backslashes
@@ -1067,7 +1071,7 @@ sub xmit
 		$self->error("Cannot write to channel: $^E");
 		return $self->raise_exception();
 	} 
-	return length("$cmd\r\n");
+	return bytes::length("$cmd\r\n");
 }
 
 
